@@ -1,0 +1,100 @@
+services:
+  # -------------------------------------------------------------
+  # Base de données relationnelle principale : PostgreSQL 16
+  # -------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: kenza-postgres-16
+    restart: always
+    environment:
+      POSTGRES_DB: kenza_sales_db
+      POSTGRES_USER: kenza_admin
+      POSTGRES_PASSWORD: kenza_secure_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kenza_admin -d kenza_sales_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kenza-network
+
+  # -------------------------------------------------------------
+  # Cache, verrous distribués & sessions WhatsApp : Redis 7
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: kenza-redis-7
+    restart: always
+    command: redis-server --appendonly yes --requirepass kenza_redis_secret
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "kenza_redis_secret", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kenza-network
+
+  # -------------------------------------------------------------
+  # Backend API & Orchestration LangGraph : Node.js 20 + Fastify
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kenza-fastify-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://kenza_admin:kenza_secure_password_2026@postgres:5432/kenza_sales_db
+      REDIS_URL: redis://:kenza_redis_secret@redis:6379/0
+      NUMEOS_BASE_URL: ${NUMEOS_BASE_URL:-https://api.numeos.ai/v1}
+      NUMEOS_API_KEY: ${NUMEOS_API_KEY:-numeos_prod_key_default}
+      NUMEOS_MODEL_NAME: ${NUMEOS_MODEL_NAME:-numeos-darija-v1}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-212600000000}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-token_test}
+    ports:
+      - "4000:4000"
+    networks:
+      - kenza-network
+
+  # -------------------------------------------------------------
+  # Frontend Dashboard & WhatsApp Simulator : React 18 + Vite
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: kenza-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    networks:
+      - kenza-network
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
+
+networks:
+  kenza-network:
+    driver: bridge
