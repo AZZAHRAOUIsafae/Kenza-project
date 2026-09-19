@@ -1,0 +1,6 @@
+{
+  "name": "Kenza — Autonomous Moroccan Sales Agent",
+  "description": "Autonomous Moroccan commercial agent for conversational sales in Darija, French & Arabic with real stock, cart engine, orders, follow-up, escalation and merchant dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
